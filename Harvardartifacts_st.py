@@ -17,10 +17,7 @@ mydb = pymysql.connect(
     database = "harvard_artifacts")
 
 mycursor = mydb.cursor()
-data3={}
-metadata = []
-media = []
-colors = []
+
 #classification_data will fetch the data from the API
 def classification_data(obj):
     data3=[]
@@ -34,6 +31,9 @@ def classification_data(obj):
 #Collected data extracted and separated into metadata, media and colors
 
 def data_extraction(x):
+    metadata=[]
+    media=[]
+    colors=[]
     
     for i in x:  # <-- loop over the 'records' key
         # Metadata
@@ -133,16 +133,38 @@ def data_insertion(metadata,media,colors):
     mediaquery = "insert into artifact_media (objectid,imagecount,mediacount,colorcount,ranknum,datebegin,dateend) values(%s,%s,%s,%s,%s,%s,%s)"
     colorquery = "insert into artifact_colors (objectid,color,spectrum,hue,percent,css3) values(%s,%s,%s,%s,%s,%s)"
     for i in metadata:
-        values1=i.values()
-        mycursor.execute(metaquery,list(values1))
+        values1 = (i['Id'], i['title'], i['culture'], i['period'], i['century'], i['medium'], i['dimensions'], i['description'], i['department'], i['classification'], i['accessionyear'], i['accessionmethod'])
+        mycursor.execute(metaquery,values1)
     for i in media:
-        values2=i.values()
-        mycursor.execute(mediaquery,list(values2))
-    for i in colors:
-        #print(i)
-        values3=i.values()
-        mycursor.execute(colorquery,list(values3))
+        values2 = (i['objectid'], i['imagecount'], i['mediacount'], i['colorcount'], i['rank'], i['datebegin'], i['dateend'])
+        mycursor.execute(mediaquery,values2)
+    for i in colors:        
+        values3 = (i['objectid'], i['color'], i['spectrum'], i['hue'], i['percent'], i['css3'])
+        mycursor.execute(colorquery,values3)
     mydb.commit()
+
+#Dataframe display
+def dataframe_display():
+    st.subheader("Artifact_Metadata_Data")
+    mycursor.execute("select * from artifact_metadata")
+    result1 = mycursor.fetchall()
+    columns = [i[0] for i in mycursor.description]
+    df1 = pd.DataFrame(result1,columns=columns)
+    st.dataframe(df1)
+
+    st.subheader("Artifact_Media_Data")
+    mycursor.execute("select * from artifact_media")
+    result2 = mycursor.fetchall()
+    columns = [i[0] for i in mycursor.description]
+    df2 = pd.DataFrame(result2,columns=columns)
+    st.dataframe(df2)
+
+    st.subheader("Artifact_Colors_Data")
+    mycursor.execute("select * from artifact_colors")
+    result3 = mycursor.fetchall()
+    columns = [i[0] for i in mycursor.description]
+    df3 = pd.DataFrame(result3,columns=columns)
+    st.dataframe(df3)
 
 #This data_display will display the collected    
 def data_display(metadata,media,colors):
@@ -294,13 +316,6 @@ def queries_func(my_query):
         query25="select artifact_metadata.ID, artifact_metadata.title, artifact_metadata.classification, artifact_media.imagecount, artifact_colors.color, artifact_colors.spectrum, artifact_colors.percent FROM artifact_metadata LEFT JOIN artifact_media ON artifact_metadata.Id = artifact_media.objectid LEFT JOIN artifact_colors ON artifact_metadata.id = artifact_colors.objectid;"
         query_execution(query25)
 
-#This method will go to the artifact_metadata table and returns what are the classifications are present
-def classification_check():
-    mycursor.execute("select distinct(classification) from artifact_metadata")
-    result = mycursor.fetchall()
-    list = [i[0] for i in result]
-    return list
-
 #Headings & Interface and its execution part
 st.title("Harvard's Artifacts collection")
 st.header('My collections are:')
@@ -313,12 +328,14 @@ menu = option_menu(None,["Select Your Choice","Migrate to SQL","SQL Queries"], o
 
 #"select your choice" option menu
 if menu=="Select Your Choice":
-    list=classification_check()    
+    mycursor.execute("select distinct(classification) from artifact_metadata")
+    result = mycursor.fetchall()
+    list = [i[0] for i in result]   
     if st.button('Collect data'):
         if classification:
             if classification not in list:
                 data3=classification_data(classification)
-                metadata,media,colors=data_extraction(data3)        
+                metadata,media,colors=data_extraction(data3)                 
                 st.write("Data collected")
                 col1, col2, col3 = st.columns(3)
                 data_display(metadata,media,colors)
@@ -329,18 +346,20 @@ if menu=="Select Your Choice":
 
 #"Migrate to SQL" option menu                      
 if menu=="Migrate to SQL":
-    list=classification_check()    
+    mycursor.execute("select distinct(classification) from artifact_metadata")
+    result = mycursor.fetchall()
+    list = [i[0] for i in result]    
     st.subheader("Insert the collected data")
-    if st.button('Insert'):
-        if classification:                        
-            if classification not in list:
-                st.write(metadata)
-                data_insertion(metadata,media,colors)
-                st.write("Data inserted successfully!")
-            else:
-                st.error("Collection already exists!")
+    if st.button('Insert'):                               
+        if classification not in list:
+            data3=classification_data(classification)
+            metadata,media,colors=data_extraction(data3)
+            data_insertion(metadata,media,colors)
+            st.write("Data inserted successfully!")
+            dataframe_display()
         else:
-            st.error("Please collect data and then try!")
+            st.error("Collection already exists!")
+        
  
 #"SQL Queries" option menu
 if menu=="SQL Queries":
@@ -375,9 +394,3 @@ if menu=="SQL Queries":
     if st.button('Run query'):        
         queries_func(my_query) #Invoking the queries function
         
-            
-        
-        
-        
-
-       
